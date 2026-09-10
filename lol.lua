@@ -1,3 +1,8 @@
+--==============================================================
+-- Platoboost + UI для Delta
+-- Замени service и secret на свои с https://platoboost.com
+--==============================================================
+
 -------------------------------------------------------------------------------
 --! json library
 --! cryptography library
@@ -7,29 +12,44 @@ local lEncode, lDecode, lDigest = a3, aw, Z;
 
 -------------------------------------------------------------------------------
 --! platoboost library
-local service = 31477;  
-local secret = "534d5db1-1fd4-4e5b-bd27-8b1fe2eea3c0";  
-local useNonce = true;  
 
-local onMessage = function(message) end;
+--! configuration (ЗАМЕНИ НА СВОИ ДАННЫЕ С platoboost.com !)
+local service = 12345;                                    -- твой service id
+local secret  = "вставь-сюда-свой-secret-uuid";           -- твой secret
+local useNonce = true;
 
-repeat task.wait(1) until game:IsLoaded();
-
-local requestSending = false;
-local fSetClipboard = setclipboard or toclipboard or syn and syn.write_clipboard;
-local fRequest = request or http_request or syn_request;
-local fStringChar, fToString, fStringSub, fOsTime, fMathRandom, fMathFloor = string.char, tostring, string.sub, os.time, math.random, math.floor;
-local fGetHwid = gethwid or function() return game:GetService("Players").LocalPlayer.UserId end
-local cachedLink, cachedTime = "", 0;
-
-local host = "https://api.platoboost.com";
-local hostResponse = fRequest({
-    Url = host .. "/public/connectivity",
-    Method = "GET"
-});
-if hostResponse.StatusCode ~= 200 or hostResponse.StatusCode ~= 429 then
-    host = "https://api.platoboost.net";
+--! callback для уведомлений
+local onMessage = function(message)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Platoboost",
+            Text  = tostring(message),
+            Duration = 4,
+        })
+    end)
+    print("[Platoboost] " .. tostring(message))
 end
+
+--! ждём загрузку игры
+repeat task.wait(0.2) until game:IsLoaded();
+
+--! функции
+local requestSending = false;
+local fSetClipboard, fRequest, fStringChar, fToString, fStringSub, fOsTime, fMathRandom, fMathFloor, fGetHwid =
+    setclipboard or toclipboard,
+    request or http_request or syn_request,
+    string.char, tostring, string.sub,
+    os.time, math.random, math.floor,
+    gethwid or function() return game:GetService("Players").LocalPlayer.UserId end
+
+local cachedLink, cachedTime = "", 0;
+local host = "https://api.platoboost.com";
+pcall(function()
+    local hostResponse = fRequest({ Url = host .. "/public/connectivity", Method = "GET" });
+    if hostResponse and hostResponse.StatusCode ~= 200 and hostResponse.StatusCode ~= 429 then
+        host = "https://api.platoboost.net";
+    end
+end)
 
 function cacheLink()
     if cachedTime + (10*60) < fOsTime() then
@@ -40,11 +60,8 @@ function cacheLink()
                 service = service,
                 identifier = lDigest(fGetHwid())
             }),
-            Headers = {
-                ["Content-Type"] = "application/json"
-            }
+            Headers = { ["Content-Type"] = "application/json" }
         });
-
         if response.StatusCode == 200 then
             local decoded = lDecode(response.Body);
             if decoded.success == true then
@@ -52,24 +69,20 @@ function cacheLink()
                 cachedTime = fOsTime();
                 return true, cachedLink;
             else
-                onMessage(decoded.message);
-                return false, decoded.message;
+                onMessage(decoded.message); return false, decoded.message;
             end
         elseif response.StatusCode == 429 then
-            local msg = "Rate limited, wait 20s.";
-            onMessage(msg);
-            return false, msg;
+            local msg = "rate limit, wait 20 seconds.";
+            onMessage(msg); return false, msg;
         end
-
         local msg = "Failed to cache link.";
-        onMessage(msg);
-        return false, msg;
+        onMessage(msg); return false, msg;
     else
         return true, cachedLink;
     end
 end
 
-cacheLink();
+pcall(cacheLink);
 
 local generateNonce = function()
     local str = ""
@@ -79,182 +92,333 @@ local generateNonce = function()
     return str
 end
 
+--! анти-рандом проверка
 for _ = 1, 5 do
     local oNonce = generateNonce();
-    task.wait(0.2)
-    if generateNonce() == oNonce then break end
+    task.wait(0.1)
+    if generateNonce() == oNonce then
+        local msg = "platoboost nonce error.";
+        onMessage(msg);
+        error(msg);
+    end
+end
+
+local copyLink = function()
+    local success, link = cacheLink();
+    if success then
+        fSetClipboard(link);
+        onMessage("Ссылка скопирована, открой в браузере.");
+    end
+    return success, link;
 end
 
 local redeemKey = function(key)
     local nonce = generateNonce();
     local endpoint = host .. "/public/redeem/" .. fToString(service);
     local body = { identifier = lDigest(fGetHwid()), key = key }
-    if useNonce then body.nonce = nonce; end
-
+    if useNonce then body.nonce = nonce end
     local response = fRequest({
-        Url = endpoint,
-        Method = "POST",
+        Url = endpoint, Method = "POST",
         Body = lEncode(body),
         Headers = { ["Content-Type"] = "application/json" }
     });
-
-    if response.StatusCode == 200 then
-        local decoded = lDecode(response.Body);
-        if decoded.success == true and decoded.data.valid == true then
-            if useNonce then
-                if decoded.data.hash == lDigest("true" .. "-" .. nonce .. "-" .. secret) then return true; end
-            else
-                return true;
-            end
-        end
-    end
-    return false;
-end
-
-local verifyKey = function(key)
-    if requestSending then return false; else requestSending = true; end
-    local nonce = generateNonce();
-    local endpoint = host .. "/public/whitelist/" .. fToString(service) .. "?identifier=" .. lDigest(fGetHwid()) .. "&key=" .. key;
-    if useNonce then endpoint = endpoint .. "&nonce=" .. nonce; end
-
-    local response = fRequest({ Url = endpoint, Method = "GET" });
-    requestSending = false;
-
     if response.StatusCode == 200 then
         local decoded = lDecode(response.Body);
         if decoded.success == true then
             if decoded.data.valid == true then
                 if useNonce then
-                    if decoded.data.hash == lDigest("true" .. "-" .. nonce .. "-" .. secret) then return true; end
-                else
-                    return true;
-                end
-            else
-                if fStringSub(key, 1, 4) == "KEY_" then return redeemKey(key); end
-            end
+                    if decoded.data.hash == lDigest("true" .. "-" .. nonce .. "-" .. secret) then
+                        return true;
+                    else onMessage("integrity check failed."); return false end
+                else return true end
+            else onMessage("key is invalid."); return false end
+        else
+            if fStringSub(decoded.message, 1, 27) == "unique constraint violation" then
+                onMessage("У тебя уже есть активный ключ, подожди пока закончится.");
+                return false;
+            else onMessage(decoded.message); return false end
         end
+    elseif response.StatusCode == 429 then
+        onMessage("rate limit, wait 20 seconds."); return false;
+    else
+        onMessage("invalid status code."); return false;
     end
-    return false;
+end
+
+local verifyKey = function(key)
+    if requestSending == true then
+        onMessage("request already sending, slow down."); return false;
+    else
+        requestSending = true;
+    end
+    local nonce = generateNonce();
+    local endpoint = host .. "/public/whitelist/" .. fToString(service)
+        .. "?identifier=" .. lDigest(fGetHwid()) .. "&key=" .. key;
+    if useNonce then endpoint = endpoint .. "&nonce=" .. nonce end
+    local response = fRequest({ Url = endpoint, Method = "GET" });
+    requestSending = false;
+    if response.StatusCode == 200 then
+        local decoded = lDecode(response.Body);
+        if decoded.success == true then
+            if decoded.data.valid == true then
+                if useNonce then
+                    if decoded.data.hash == lDigest("true" .. "-" .. nonce .. "-" .. secret) then
+                        return true;
+                    else onMessage("integrity check failed."); return false end
+                else return true end
+            else
+                if fStringSub(key, 1, 4) == "KEY_" then
+                    return redeemKey(key);
+                else onMessage("key is invalid."); return false end
+            end
+        else onMessage(decoded.message); return false end
+    elseif response.StatusCode == 429 then
+        onMessage("rate limit, wait 20 seconds."); return false;
+    else
+        onMessage("invalid status code."); return false;
+    end
+end
+
+local getFlag = function(name)
+    local nonce = generateNonce();
+    local endpoint = host .. "/public/flag/" .. fToString(service) .. "?name=" .. name;
+    if useNonce then endpoint = endpoint .. "&nonce=" .. nonce end
+    local response = fRequest({ Url = endpoint, Method = "GET" });
+    if response.StatusCode == 200 then
+        local decoded = lDecode(response.Body);
+        if decoded.success == true then
+            if useNonce then
+                if decoded.data.hash == lDigest(fToString(decoded.data.value) .. "-" .. nonce .. "-" .. secret) then
+                    return decoded.data.value;
+                else onMessage("integrity check failed."); return nil end
+            else return decoded.data.value end
+        else onMessage(decoded.message); return nil end
+    else return nil end
 end
 -------------------------------------------------------------------------------
 
---! UI & Logic for Delta
-local function showNotify(text)
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Kneo World | Key System",
-        Text = text,
-        Duration = 3
-    })
+-------------------------------------------------------------------------------
+--! UI + логика загрузки главного скрипта
+-------------------------------------------------------------------------------
+
+-- защита от повторного запуска
+if _G.__PB_UI_OPEN then
+    return
+end
+_G.__PB_UI_OPEN = true
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local UserInput = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+
+local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/Kneo-World/1/refs/heads/main/Main.lua"
+
+-- удаляем старое окно если есть
+pcall(function()
+    local old = CoreGui:FindFirstChild("PB_KeyUI")
+    if old then old:Destroy() end
+end)
+
+-- создаём ScreenGui
+local gui = Instance.new("ScreenGui")
+gui.Name = "PB_KeyUI"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() gui.Parent = CoreGui end)
+if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+-- главный фрейм
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 420, 0, 260)
+main.Position = UDim2.new(0.5, -210, 0.5, -130)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+main.Parent = gui
+
+local corner = Instance.new("UICorner", main)
+corner.CornerRadius = UDim.new(0, 12)
+
+local stroke = Instance.new("UIStroke", main)
+stroke.Color = Color3.fromRGB(80, 80, 120)
+stroke.Thickness = 1.5
+stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+-- заголовок
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "🔑  Kneo Keysystem"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.Parent = main
+
+-- статус
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -30, 0, 22)
+status.Position = UDim2.new(0, 15, 0, 42)
+status.BackgroundTransparency = 1
+status.Text = "Введи ключ или получи новый"
+status.TextColor3 = Color3.fromRGB(160, 160, 180)
+status.Font = Enum.Font.Gotham
+status.TextSize = 13
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = main
+
+-- TextBox
+local box = Instance.new("TextBox")
+box.Size = UDim2.new(1, -30, 0, 40)
+box.Position = UDim2.new(0, 15, 0, 75)
+box.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
+box.BorderSizePixel = 0
+box.Text = ""
+box.PlaceholderText = "Вставь свой ключ сюда..."
+box.TextColor3 = Color3.fromRGB(240, 240, 240)
+box.PlaceholderColor3 = Color3.fromRGB(120, 120, 140)
+box.Font = Enum.Font.Gotham
+box.TextSize = 14
+box.ClearTextOnFocus = false
+box.Parent = main
+
+local boxCorner = Instance.new("UICorner", box)
+boxCorner.CornerRadius = UDim.new(0, 8)
+
+-- кнопка получить ключ
+local getBtn = Instance.new("TextButton")
+getBtn.Size = UDim2.new(1, -30, 0, 38)
+getBtn.Position = UDim2.new(0, 15, 0, 125)
+getBtn.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
+getBtn.BorderSizePixel = 0
+getBtn.Text = "📋  Получить ключ (ссылка в буфер)"
+getBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+getBtn.Font = Enum.Font.GothamSemibold
+getBtn.TextSize = 14
+getBtn.Parent = main
+
+local getCorner = Instance.new("UICorner", getBtn)
+getCorner.CornerRadius = UDim.new(0, 8)
+
+-- кнопка проверить
+local verifyBtn = Instance.new("TextButton")
+verifyBtn.Size = UDim2.new(1, -30, 0, 45)
+verifyBtn.Position = UDim2.new(0, 15, 0, 175)
+verifyBtn.BackgroundColor3 = Color3.fromRGB(40, 170, 90)
+verifyBtn.BorderSizePixel = 0
+verifyBtn.Text = "✅  Проверить ключ и запустить"
+verifyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+verifyBtn.Font = Enum.Font.GothamBold
+verifyBtn.TextSize = 15
+verifyBtn.Parent = main
+
+local verifyCorner = Instance.new("UICorner", verifyBtn)
+verifyCorner.CornerRadius = UDim.new(0, 8)
+
+-- кнопка закрыть
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -36, 0, 8)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+closeBtn.BorderSizePixel = 0
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 14
+closeBtn.Parent = main
+
+local closeCorner = Instance.new("UICorner", closeBtn)
+closeCorner.CornerRadius = UDim.new(1, 0)
+
+closeBtn.MouseButton1Click:Connect(function()
+    gui:Destroy()
+    _G.__PB_UI_OPEN = false
+end)
+
+-- нижняя подсказка
+local hint = Instance.new("TextLabel")
+hint.Size = UDim2.new(1, -30, 0, 18)
+hint.Position = UDim2.new(0, 15, 1, -22)
+hint.BackgroundTransparency = 1
+hint.Text = "Ключ действует 1 час · одноразовый"
+hint.TextColor3 = Color3.fromRGB(120, 120, 140)
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 11
+hint.TextXAlignment = Enum.TextXAlignment.Right
+hint.Parent = main
+
+-- хелпер обновления статуса
+local function setStatus(text, color)
+    status.Text = tostring(text)
+    status.TextColor3 = color or Color3.fromRGB(160, 160, 180)
 end
 
-onMessage = function(message)
-    showNotify(message)
-end
-
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local UICorner = Instance.new("UICorner")
-local Title = Instance.new("TextLabel")
-local KeyBox = Instance.new("TextBox")
-local BoxCorner = Instance.new("UICorner")
-local GetKeyBtn = Instance.new("TextButton")
-local GetCorner = Instance.new("UICorner")
-local VerifyBtn = Instance.new("TextButton")
-local VerifyCorner = Instance.new("UICorner")
-
-ScreenGui.Parent = game.CoreGui
-ScreenGui.Name = "KneoKeySystem"
-
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
-MainFrame.Size = UDim2.new(0, 300, 0, 210)
-
-UICorner.Parent = MainFrame
-UICorner.CornerRadius = UDim.new(0, 10)
-
-Title.Parent = MainFrame
-Title.BackgroundTransparency = 1
-Title.Position = UDim2.new(0, 0, 0, 10)
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "Kneo World - Key System"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 16
-
-KeyBox.Parent = MainFrame
-KeyBox.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
-KeyBox.Position = UDim2.new(0.1, 0, 0, 50)
-KeyBox.Size = UDim2.new(0.8, 0, 0, 40)
-KeyBox.Font = Enum.Font.Gotham
-KeyBox.PlaceholderText = "Вставь ключ или жми 'Получить'..."
-KeyBox.Text = ""
-KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-KeyBox.TextSize = 14
-
-BoxCorner.Parent = KeyBox
-BoxCorner.CornerRadius = UDim.new(0, 6)
-
-GetKeyBtn.Parent = MainFrame
-GetKeyBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-GetKeyBtn.Position = UDim2.new(0.1, 0, 0, 100)
-GetKeyBtn.Size = UDim2.new(0.8, 0, 0, 35)
-GetKeyBtn.Font = Enum.Font.GothamBold
-GetKeyBtn.Text = "Получить ссылку"
-GetKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-GetKeyBtn.TextSize = 13
-
-GetCorner.Parent = GetKeyBtn
-GetCorner.CornerRadius = UDim.new(0, 6)
-
-VerifyBtn.Parent = MainFrame
-VerifyBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-VerifyBtn.Position = UDim2.new(0.1, 0, 0, 145)
-VerifyBtn.Size = UDim2.new(0.8, 0, 0, 35)
-VerifyBtn.Font = Enum.Font.GothamBold
-VerifyBtn.Text = "Проверить ключ"
-VerifyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-VerifyBtn.TextSize = 13
-
-VerifyCorner.Parent = VerifyBtn
-VerifyCorner.CornerRadius = UDim.new(0, 6)
-
-GetKeyBtn.MouseButton1Click:Connect(function()
-    local success, link = cacheLink()
-    if success and link ~= "" then
-        if fSetClipboard then
-            fSetClipboard(link)
-            showNotify("Ссылка скопирована в буфер обмена!")
-        else
-            -- Если буфер обмена в Delta заблокирован, выводим ссылку в поле ввода
-            KeyBox.Text = link
-            showNotify("Скопируй ссылку из поля ввода вручную!")
-        end
+-- обработка кнопки "получить ключ"
+getBtn.MouseButton1Click:Connect(function()
+    setStatus("Получаю ссылку...", Color3.fromRGB(200, 200, 100))
+    local ok, linkOrErr = copyLink()
+    if ok then
+        setStatus("Ссылка скопирована! Открой её в браузере и получи ключ.", Color3.fromRGB(100, 220, 130))
     else
-        showNotify("Ошибка генерации ссылки.")
+        setStatus("Ошибка: " .. tostring(linkOrErr), Color3.fromRGB(230, 100, 100))
     end
 end)
 
-VerifyBtn.MouseButton1Click:Connect(function()
-    local userKey = KeyBox.Text
-    if userKey == "" then
-        showNotify("Поле ввода пустое!")
+-- флаг что скрипт уже грузится (защита от дабл-клика)
+local loading = false
+
+-- обработка кнопки "проверить"
+verifyBtn.MouseButton1Click:Connect(function()
+    if loading then return end
+    local key = box.Text
+    if key == nil or key == "" then
+        setStatus("Введи ключ!", Color3.fromRGB(230, 100, 100))
         return
     end
-    
-    local isValid = verifyKey(userKey)
-    if isValid then
-        showNotify("Ключ подтвержден! Загружаю скрипт...")
-        ScreenGui:Destroy()
-        
-        local success, err = pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/Kneo-World/1/refs/heads/main/Main.lua"))()
+
+    loading = true
+    verifyBtn.Text = "⏳  Проверяю..."
+    verifyBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 40)
+    setStatus("Проверяю ключ на сервере...", Color3.fromRGB(200, 200, 100))
+
+    task.spawn(function()
+        local ok, err = pcall(function()
+            return verifyKey(key)
         end)
-        
-        if not success then
-            warn(err)
+
+        if ok and err == true then
+            setStatus("✅ Ключ валиден! Запускаю скрипт...", Color3.fromRGB(100, 220, 130))
+            verifyBtn.Text = "✅  Загружаю скрипт..."
+            verifyBtn.BackgroundColor3 = Color3.fromRGB(40, 170, 90)
+
+            task.wait(0.6)
+
+            -- закрываем окно
+            gui:Destroy()
+            _G.__PB_UI_OPEN = false
+
+            -- грузим главный скрипт
+            local okLoad, loadErr = pcall(function()
+                loadstring(game:HttpGet(MAIN_SCRIPT_URL))()
+            end)
+
+            if not okLoad then
+                warn("[Kneo] Ошибка загрузки main script: " .. tostring(loadErr))
+                pcall(function()
+                    game:GetService("StarterGui"):SetCore("SendNotification", {
+                        Title = "Ошибка загрузки",
+                        Text = tostring(loadErr),
+                        Duration = 5,
+                    })
+                end)
+            end
+        else
+            loading = false
+            verifyBtn.Text = "✅  Проверить ключ и запустить"
+            verifyBtn.BackgroundColor3 = Color3.fromRGB(40, 170, 90)
+            setStatus("❌ Ключ неверный или истёк", Color3.fromRGB(230, 100, 100))
         end
-    else
-        showNotify("Неверный ключ или срок истек.")
-    end
+    end)
 end)
