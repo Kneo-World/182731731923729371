@@ -1,7 +1,48 @@
--- Создание UI для ввода ключа
+-- Настройки Platoboost
+local SERVICE_ID = 31477
+local API_KEY = "534d5db1-1fd4-4e5b-bd27-8b1fe2eea3c0"
+
+-- Функция генерации ссылки через API Platoboost
+local function getLink()
+    local hwid = game:GetService("RbxAnalyticsService"):GetClientId()
+    local url = "https://api.platoboost.com/public/start?serviceId=31477&identifier=" .. game:GetService("HttpService"):UrlEncode(hwid)
+    
+    local success, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if success then
+        local data = game:GetService("HttpService"):JSONDecode(response)
+        -- Платобуст возвращает ссылку в поле data.url или data.link
+        if data and (data.url or data.link) then
+            return data.url or data.link
+        end
+    end
+    
+    -- Если API не ответило, возвращаем прямую ссылку на твой сервис в Platoboost
+    return "https://platoboost.com/a/31477"
+end
+
+-- Функция проверки ключа через API Platoboost
+local function verifyKey(key)
+    local hwid = game:GetService("RbxAnalyticsService"):GetClientId()
+    local url = "https://api.platoboost.com/public/check?serviceId=" .. SERVICE_ID .. "&key=" .. key .. "&identifier=" .. hwid
+    local success, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if success then
+        local data = game:GetService("HttpService"):JSONDecode(response)
+        if data and data.success then
+            return true
+        end
+    end
+    return false
+end
+
+-- Создание UI
 local CoreGui = gethui and gethui() or game:GetService("CoreGui")
 local ScreenGui = Instance.new("ScreenGui", CoreGui)
-ScreenGui.Name = "KneoKeySystem"
+ScreenGui.Name = "PlatoboostKeySystem"
 
 local Frame = Instance.new("Frame", ScreenGui)
 Frame.Size = UDim2.new(0, 320, 0, 180)
@@ -15,7 +56,7 @@ Corner.CornerRadius = UDim.new(0, 8)
 local TextBox = Instance.new("TextBox", Frame)
 TextBox.Size = UDim2.new(0.8, 0, 0, 35)
 TextBox.Position = UDim2.new(0.1, 0, 0.3, 0)
-TextBox.PlaceholderText = "Введи ключ..."
+TextBox.PlaceholderText = "Введи ключ с LootLabs..."
 TextBox.Text = ""
 TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 TextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
@@ -46,10 +87,10 @@ GetKeyBtn.TextSize = 14
 local GetKeyCorner = Instance.new("UICorner", GetKeyBtn)
 GetKeyCorner.CornerRadius = UDim.new(0, 6)
 
--- Логика кнопок
+-- Обработка кнопок
 GetKeyBtn.MouseButton1Click:Connect(function()
-    local link = copyLink()
-    if setclipboard and link then
+    local link = getLink()
+    if setclipboard then
         setclipboard(link)
         GetKeyBtn.Text = "Ссылка скопирована!"
         task.wait(2)
@@ -59,14 +100,12 @@ end)
 
 CheckBtn.MouseButton1Click:Connect(function()
     local key = TextBox.Text
-    local isValid = verifyKey(key)
-    
-    if isValid then
+    if verifyKey(key) then
         CheckBtn.Text = "Успешно!"
         task.wait(1)
         ScreenGui:Destroy()
-        -- Твой основной код скрипта после успешной проверки
-        print("Ключ принят, скрипт запущен!")
+        -- Запуск твоего основного скрипта
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Kneo-World/1/refs/heads/main/Main.lua"))()
     else
         CheckBtn.Text = "Неверный ключ!"
         task.wait(1.5)
