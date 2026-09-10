@@ -1,24 +1,25 @@
--- Защита и подключение Platoboost (вставь свой код библиотеки выше или используй этот шаблон)
--- SERVICE ID и SECRET бери из своего личного кабинета Platoboost
-local service = 31477
-local secret = "534d5db1-1fd4-4e5b-bd27-8b1fe2eea3c0" 
-local useNonce = true
+-- 1. Сюда вставляется вся библиотека Platoboost (которую ты скидывал первым сообщением)
+-- ... (весь код шифрования, функции copyLink, verifyKey и т.д.) ...
 
--- Функция уведомлений для Delta
+-- Укажи свои данные из панели Platoboost:
+service = 31477
+secret = "534d5db1-1fd4-4e5b-bd27-8b1fe2eea3c0" 
+useNonce = true
+
+-- 2. Функция уведомлений (под Delta / Synapse / другие эмуляторы)
 local function showNotify(text)
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Key System",
+        Title = "Kneo World | Key System",
         Text = text,
         Duration = 3
     })
 end
 
--- Переопределяем callback для сообщений Platoboost
 onMessage = function(message)
     showNotify(message)
 end
 
--- Создание простого и красивого UI под Delta
+-- 3. Создание графического интерфейса (UI)
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local UICorner = Instance.new("UICorner")
@@ -31,10 +32,10 @@ local VerifyBtn = Instance.new("TextButton")
 local VerifyCorner = Instance.new("UICorner")
 
 ScreenGui.Parent = game.CoreGui
-ScreenGui.Name = "PlatoKeySystem"
+ScreenGui.Name = "KneoKeySystem"
 
 MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
 MainFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
 MainFrame.Size = UDim2.new(0, 300, 0, 210)
 
@@ -46,16 +47,16 @@ Title.BackgroundTransparency = 1
 Title.Position = UDim2.new(0, 0, 0, 10)
 Title.Size = UDim2.new(1, 0, 0, 30)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "Key System (Platoboost)"
+Title.Text = "Kneo World - Key System"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 16
 
 KeyBox.Parent = MainFrame
-KeyBox.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+KeyBox.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
 KeyBox.Position = UDim2.new(0.1, 0, 0, 50)
 KeyBox.Size = UDim2.new(0.8, 0, 0, 40)
 KeyBox.Font = Enum.Font.Gotham
-KeyBox.PlaceholderText = "Вставь ключ сюда..."
+KeyBox.PlaceholderText = "Вставь ключ от LootLabs..."
 KeyBox.Text = ""
 KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 KeyBox.TextSize = 14
@@ -64,11 +65,11 @@ BoxCorner.Parent = KeyBox
 BoxCorner.CornerRadius = UDim.new(0, 6)
 
 GetKeyBtn.Parent = MainFrame
-GetKeyBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 216)
+GetKeyBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
 GetKeyBtn.Position = UDim2.new(0.1, 0, 0, 100)
 GetKeyBtn.Size = UDim2.new(0.8, 0, 0, 35)
 GetKeyBtn.Font = Enum.Font.GothamBold
-GetKeyBtn.Text = "Получить ссылку (LootLabs)"
+GetKeyBtn.Text = "Получить ключ"
 GetKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 GetKeyBtn.TextSize = 13
 
@@ -87,28 +88,35 @@ VerifyBtn.TextSize = 13
 VerifyCorner.Parent = VerifyBtn
 VerifyCorner.CornerRadius = UDim.new(0, 6)
 
--- Логика кнопок
+-- 4. Обработка нажатий
 GetKeyBtn.MouseButton1Click:Connect(function()
-    copyLink() -- Копирует ссылку на прохождение чекпоинта LootLabs в буфер обмена
-    showNotify("Ссылка скопирована в буфер обмена!")
+    copyLink() -- Platoboost сам создаст ссылку через LootLabs и кинет её в буфер обмена игрока
+    showNotify("Ссылка на LootLabs скопирована в буфер обмена!")
 end)
 
 VerifyBtn.MouseButton1Click:Connect(function()
     local userKey = KeyBox.Text
     if userKey == "" then
-        showNotify("Введи ключ!")
+        showNotify("Поле ввода пустое!")
         return
     end
     
-    local isValid = verifyKey(userKey)
+    local isValid = verifyKey(userKey) -- Проверяем ключ через API Platoboost
+    
     if isValid then
-        showNotify("Ключ верный! Запуск скрипта...")
-        ScreenGui:Destroy() -- Закрываем окно ключа
+        showNotify("Ключ подтвержден! Загружаю скрипт...")
+        ScreenGui:Destroy() -- Убираем окно с ключом
         
-        -- ТВОЙ ОСНОВНОЙ СКРИПТ ПИСАТЬ ЗДЕСЬ:
-        print("Скрипт успешно разблокирован!")
+        -- ЗАГРУЖАЕМ ТВОЙ ОСНОВНОЙ СКРИПТ С GITHUB ПОСЛЕ УСПЕШНОЙ ПРОВЕРКИ:
+        local success, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Kneo-World/1/refs/heads/main/Main.lua"))()
+        end)
         
+        if not success then
+            showNotify("Ошибка запуска Main.lua: " .. tostring(err))
+            warn(err)
+        end
     else
-        showNotify("Неверный ключ или просрочен.")
+        showNotify("Неверный ключ или срок его действия истек.")
     end
 end)
