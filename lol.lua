@@ -101,18 +101,20 @@ function cacheLink()
 
     local platorelayUrl = decoded.data.url;
 
-       -- ========== ШАГ 2: создать LootLabs лочкер ==========
-    -- Документация: POST с Authorization: Bearer TOKEN
-    -- Response: {"type":"created","message":[{"short":"...","loot_url":"..."}]}
+           -- ========== ШАГ 2: создать LootLabs лочкер ==========
+    -- Настройки под твой скрин:
+    --   tier_id = 3            -> Profit Maximization
+    --   number_of_tasks = 5    -> Максимум заданий
+    --   theme = 6              -> ROBLOX (если вернёт ошибку — меняй на 1..5)
     local lootResponse, lootErr = safeRequest({
         Url = LOOTLABS_ENDPOINT,
         Method = "POST",
         Body = lEncode({
-            title = "Kneo Keysystem",       -- max 30 символов
-            url = platorelayUrl,             -- куда редиректить
-            tier_id = 1,                     -- 1 = Trending & Recommended (1-4)
-            number_of_tasks = 3,             -- 1-5, сколько реклам
-            theme = 1                        -- 1 = Classic (1-5)
+            title = "Kneo Keysystem",
+            url = platorelayUrl,
+            tier_id = 3,
+            number_of_tasks = 5,
+            theme = 5
         }),
         Headers = {
             ["Content-Type"] = "application/json",
@@ -152,7 +154,7 @@ function cacheLink()
         return false, "lootlabs error";
     end
 
-    cachedLink = lootDecoded.message[1].loot_url;   -- берём loot_url из первого элемента массива
+    cachedLink = lootDecoded.message[1].loot_url;
     cachedTime = fOsTime();
 
     return true, cachedLink;
