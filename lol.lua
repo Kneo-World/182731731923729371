@@ -14,8 +14,8 @@ local lEncode, lDecode, lDigest = a3, aw, Z;
 --! platoboost library
 
 --! configuration (ЗАМЕНИ НА СВОИ ДАННЫЕ С platoboost.com !)
-local service = 12345;                                    -- твой service id
-local secret  = "вставь-сюда-свой-secret-uuid";           -- твой secret
+local service = 31477;                                    -- твой service id
+local secret  = "534d5db1-1fd4-4e5b-bd27-8b1fe2eea3c0";           -- твой secret
 local useNonce = true;
 
 --! callback для уведомлений
