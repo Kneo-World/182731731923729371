@@ -102,6 +102,7 @@ function cacheLink()
     local platorelayUrl = decoded.data.url;
 
     -- ШАГ 2: шифруем ссылку через LootLabs
+        -- ШАГ 2: шифруем ссылку через LootLabs
     local encryptResponse, encryptErr = safeRequest({
         Url = "https://creators.lootlabs.gg/api/public/url_encryptor",
         Method = "POST",
@@ -118,9 +119,12 @@ function cacheLink()
         return false, msg;
     end
 
+    -- ОТЛАДКА: показываем, что ответил LootLabs
+    onMessage("LootLabs ответ: " .. tostring(encryptResponse.StatusCode) .. " | " .. tostring(encryptResponse.Body));
+
     local okEncDecode, encDecoded = pcall(lDecode, encryptResponse.Body);
     if not okEncDecode or type(encDecoded) ~= "table" or encDecoded.type ~= "created" then
-        onMessage("LootLabs не зашифровал ссылку.");
+        onMessage("LootLabs не зашифровал ссылку. Ответ: " .. tostring(encryptResponse.Body));
         return false, "lootlabs encrypt error";
     end
 
